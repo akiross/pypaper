@@ -210,7 +210,7 @@ them in the PyPaper.tools module:
 and other random tools and data types.
 
 ## Author
-I am a basically monkey who learned how to code.
+I am basically a monkey who learned how to code.
 Please do not be mad with me for my poor coding skills, or my
 bad English, or if I re-invented the wheel or if you think that
 a browser can do this and much more. I know.
