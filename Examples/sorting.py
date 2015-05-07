@@ -1,4 +1,9 @@
 # Visualizing sorting algorithms
+#
+# This script shall be run inside pypaper:
+#     ./pypaper Examples/sorting.py
+# or, from the pypaper console:
+#     %open Examples/sorting
 
 from PyQt5.QtCore import Qt
 from PyPaper.core.styleditem import StyledItem
@@ -81,3 +86,4 @@ print('Press Esc to toggle the console')
 
 reset_data()
 _canvas_.keyPressEvent = keyPressEvent.__get__(_canvas_, _canvas_.__class__)
+
