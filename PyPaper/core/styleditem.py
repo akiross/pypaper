@@ -390,8 +390,10 @@ class StyledItem(QQuickPaintedItem):
 			agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
 			agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
 	
-	def rotate_to(self, a, on_finished=None, **kwargs):
+	def rotate_to(self, a, offset=False, on_finished=None, **kwargs):
 		'''Animate the rotation of this item'''
+		if offset:
+			a += self.rotation()
 		with seq_anim_cm(self) as agrp:
 			if on_finished:
 				agrp.finished.connect(on_finished)
