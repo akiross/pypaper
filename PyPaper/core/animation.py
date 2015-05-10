@@ -36,10 +36,11 @@ def prop_animation(obj, prop, end, duration=500, easing='InOutQuad', start=None)
 
 class AnimContextManager:
 	'''Builds a context manager to handle animation groups'''
-	def __init__(self, sequential, blocking, *items):
-		self._its = items
+	def __init__(self, sequential, blocking, *items, parent=None):
+		self._its = set(items) # Unique items
 		self._seq = sequential
 		self._block = blocking
+		self._parent = parent
 
 	def _clear_anims(self, item):
 		def is_not_stopped(a):
@@ -67,7 +68,10 @@ class AnimContextManager:
 			ctx = item._animation_contexts.pop()
 			if ctx is not self:
 				print('WARNING: I think this should never happen :|')
-			if item._animation_contexts:
+			if self._parent:
+				# If a parent context manager has been provided, use it
+				self._parent.addAnimation(ctx._animation_group)
+			elif item._animation_contexts:
 				# If there was a previous group, add to that group
 				item._animation_contexts[-1]._animation_group.addAnimation(ctx._animation_group)
 			else:
@@ -93,14 +97,14 @@ class AnimContextManager:
 				else:
 					self._animation_group.start()
 
-def seq_anim_cm(*items):
-	return AnimContextManager(True, False, *items)
+def seq_anim_cm(*items, **kwargs):
+	return AnimContextManager(True, False, *items, **kwargs)
 
-def par_anim_cm(*items):
-	return AnimContextManager(False, False, *items)
+def par_anim_cm(*items, **kwargs):
+	return AnimContextManager(False, False, *items, **kwargs)
 
-def block_seq_anim_cm(*items):
-	return AnimContextManager(True, True, *items)
+def block_seq_anim_cm(*items, **kwargs):
+	return AnimContextManager(True, True, *items, **kwargs)
 
-def block_par_anim_cm(*items):
-	return AnimContextManager(False, True, *items)
+def block_par_anim_cm(*items, **kwargs):
+	return AnimContextManager(False, True, *items, **kwargs)
