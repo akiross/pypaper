@@ -21,26 +21,21 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
 from PyPaper.core.animation import seq_anim_cm, par_anim_cm, prop_animation
+from PyPaper.core.registry import Registry
 from PyPaper.tools.tools import *
 
-class StyledItem(QQuickPaintedItem):
+class Item(QQuickPaintedItem, Registry):
+	'''This class is the base class, representing an item
+	capable of be used in PyPaper, supporting animations,
+	callbacks, interactions, layouts, etc.
+	This item extends Qt items to provide PyPaper specific
+	functions.
+	This item has a position, rotation, size, etc'''
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.bord_col_ = QColor.fromRgbF(0, 0, 0)
-		self.backg_col_ = QColor.fromRgbF(1, 0, 0)
-		self._font_col = QColor.fromRgbF(0, 0, 0)
-		self._font_size = None
-		self._backgr_img_path = None
-		self._backgr_img = None
-		self._bg_img_fit_mode = 'full'
-		self._bg_img_stretch = True
 		self._animations = [] # List of playing animations involving this item
 		self._animation_contexts = [] # Groups of animations to be built
-		self._callbacks = {}
-		self._x_rad = 0
-		self._y_rad = 0
-		self._rel_rad = True
-		self._text = None
 
 		# Ensure that all mouse buttons are accepted
 		self.setAcceptedMouseButtons(Qt.AllButtons)
@@ -50,120 +45,6 @@ class StyledItem(QQuickPaintedItem):
 		self._movable = True
 		self._press_pos = None
 
-		self._bord = (1, 1, 1, 1)
-		self._marg = (0, 0, 0, 0)
-		self._padd = (5, 5, 5, 5)
-	
-	def get_border_color(self):
-		return self.bord_col_
-
-	def set_border_color(self, col):
-		if hasattr(col, '__iter__'):
-			col = make_rgba(*col)
-		# Update if changed
-		if self.bord_col_ != col:
-			self.bord_col_ = col
-			self.update()
-	
-	border_color = pyqtProperty(QColor, fget=get_border_color, fset=set_border_color)
-
-	def get_background_color(self):
-		return self.backg_col_
-
-	def set_background_color(self, col):
-		# If iterable is provided, convert to QColor
-		if hasattr(col, '__iter__'):
-			col = make_rgba(*col)
-		# Update only if color changes
-		if self.backg_col_ != col:
-			self.backg_col_ = col
-			self.update()
-	
-	background_color = pyqtProperty(QColor, fget=get_background_color, fset=set_background_color)
-
-	def get_font_color(self):
-		return self._font_col
-
-	def set_font_color(self, col):
-		if hasattr(col, '__iter__'):
-			col = make_rgba(*col)
-		if self._font_col != col:
-			self._font_col = col
-			self.update()
-	
-	font_color = pyqtProperty(QColor, fget=get_font_color, fset=set_font_color)
-
-	def set_font_size(self, size):
-		self._font_size = size
-		self.update()
-
-	def get_font_size(self):
-		return self._font_size
-
-	def set_background_image(self, image_path):
-		import os
-		if image_path != self._backgr_img_path:
-			self._backgr_img_path = image_path
-			if os.path.isfile(image_path):
-				self._backgr_img = QImage(image_path)
-			else:
-				self._backgr_img = None
-			self.update()
-	
-	def get_background_image(self):
-		return self._backgr_img # TODO shall return path if path was saved
-
-	def set_background_mode(self, fit_mode):
-		'''fit_mode is a str
-			'none': image has its original size or stretched to fit
-			'full': image is never cropped
-			'width': image's width never exceeds rectangle's width
-			'height': similar to width
-		'''
-		self._bg_img_fit_mode = fit_mode
-
-	def set_background_stretch(self, stretch):
-		''' stretch is a bool
-			True: the image is enlarged if too small for the rectangle
-			False: image will never be larger than its original dimension
-		'''
-		self._bg_img_stretch = stretch
-
-	def register(self, event, target_obj, callback):
-		'''Register a callback for the specified event.
-		If target_obj is None, the callback is called once and then removed.
-			No first argument is passed to the callback
-		If target_obj is not None, the callback is called until removed,
-			and callback is automatically removed on event target_obj.on_remove
-		'''
-		if target_obj is None:
-			def _call_once(*args, **kwargs):
-				callback(*args, **kwargs)
-				self.unregister(event, None, _call_once)
-			self._callbacks.setdefault(event, []).append((None, _call_once))
-		else:
-			self._callbacks.setdefault(event, []).append((target_obj, callback))
-			def _remove_cb(unused, obj):
-				self.unregister(event, target_obj, callback)
-			target_obj.register('on_remove', None, _remove_cb)
-
-	def unregister(self, event, target_obj, callback):
-		'''Unregister a callback for the specified event'''
-		self._callbacks[event].remove((target_obj, callback))
-	
-	def _run_callbacks(self, event, *args, **kwargs):
-		'''Run the callbacks associated to event, passing the specified parameters'''
-		# What if a callback calls unregister while iterating? Copy the list before iterating
-		for obj, cb in list(it for it in self._callbacks.get(event, [])):
-			cb(obj, *args, **kwargs)
-
-	def __setattr__(self, name, value):
-		'''Handles the setting of callbacks, which are not replaced, but grouped'''
-		if name.startswith('on_'):
-			raise RuntimeError('Sistema il codice, non registrare con l\'uguale, ma con register/unregister')
-		else:
-			super().__setattr__(name, value)
-	
 	def geometryChanged(self, g_new, g_old):
 		'''
 		Handles the geometry changes, by calling the appropriate callbacks
@@ -246,7 +127,158 @@ class StyledItem(QQuickPaintedItem):
 	def attach(self, parent):
 		self._run_callbacks('on_attach', self)
 		self.setParentItem(parent)
+
+	def set_pos(self, x, y):
+		self.setX(x)
+		self.setY(y)
 	
+	def get_pos(self):
+		return self.x(), self.y()
+	
+	def set_size(self, w, h):
+		self.setWidth(w)
+		self.setHeight(h)
+	
+	def get_size(self):
+		return self.width(), self.height()
+
+	def opacity_to(self, end_op, on_finished=None, **kwargs):
+		'''Animate item opacity'''
+		with seq_anim_cm(self) as agrp:
+			if on_finished:
+				agrp.finished.connect(on_finished)
+			agrp.addAnimation(prop_animation(self, 'opacity', end_op, **kwargs))
+	
+	def move_to(self, x, y, offset=False, on_finished=None, **kwargs):
+		'''Animate the movement of this item toward a given target position.'''
+		if offset:
+			xo, yo = self.get_pos()
+			if x is not None: x += xo
+			if y is not None: y += yo
+
+		with par_anim_cm(self) as agrp:
+			if on_finished:
+				agrp.finished.connect(on_finished)
+			if x is not None:
+				agrp.addAnimation(prop_animation(self, 'x', x, **kwargs))
+			if y is not None:
+				agrp.addAnimation(prop_animation(self, 'y', y, **kwargs))
+	
+	def resize_to(self, w, h, on_finished=None, **kwargs):
+		'''Animate the resize of this item'''
+		with par_anim_cm(self) as agrp:
+			if on_finished:
+				agrp.finished.connect(on_finished)
+			agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
+			agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
+	
+	def rotate_to(self, a, offset=False, on_finished=None, **kwargs):
+		'''Animate the rotation of this item'''
+		if offset:
+			a += self.rotation()
+		with seq_anim_cm(self) as agrp:
+			if on_finished:
+				agrp.finished.connect(on_finished)
+			agrp.addAnimation(prop_animation(self, 'rotation', a, **kwargs))
+
+
+class StyledItem(Item):
+	'''StyledItem, this is a multi-purpose item which probably
+	will be used for basically everything'''
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.bord_col_ = QColor.fromRgbF(0, 0, 0)
+		self.backg_col_ = QColor.fromRgbF(1, 0, 0)
+		self._font_col = QColor.fromRgbF(0, 0, 0)
+		self._font_size = None
+		self._backgr_img_path = None
+		self._backgr_img = None
+		self._bg_img_fit_mode = 'full'
+		self._bg_img_stretch = True
+		self._x_rad = 0
+		self._y_rad = 0
+		self._rel_rad = True
+		self._text = None
+
+		self._bord = (1, 1, 1, 1)
+		self._marg = (0, 0, 0, 0)
+		self._padd = (5, 5, 5, 5)
+	
+	def get_border_color(self):
+		return self.bord_col_
+
+	def set_border_color(self, col):
+		if hasattr(col, '__iter__'):
+			col = make_rgba(*col)
+		# Update if changed
+		if self.bord_col_ != col:
+			self.bord_col_ = col
+			self.update()
+	
+	border_color = pyqtProperty(QColor, fget=get_border_color, fset=set_border_color)
+
+	def get_background_color(self):
+		return self.backg_col_
+
+	def set_background_color(self, col):
+		# If iterable is provided, convert to QColor
+		if hasattr(col, '__iter__'):
+			col = make_rgba(*col)
+		# Update only if color changes
+		if self.backg_col_ != col:
+			self.backg_col_ = col
+			self.update()
+	
+	background_color = pyqtProperty(QColor, fget=get_background_color, fset=set_background_color)
+
+	def get_font_color(self):
+		return self._font_col
+
+	def set_font_color(self, col):
+		if hasattr(col, '__iter__'):
+			col = make_rgba(*col)
+		if self._font_col != col:
+			self._font_col = col
+			self.update()
+	
+	font_color = pyqtProperty(QColor, fget=get_font_color, fset=set_font_color)
+
+	def set_font_size(self, size):
+		self._font_size = size
+		self.update()
+
+	def get_font_size(self):
+		return self._font_size
+
+	def set_background_image(self, image_path):
+		import os
+		if image_path != self._backgr_img_path:
+			self._backgr_img_path = image_path
+			if os.path.isfile(image_path):
+				self._backgr_img = QImage(image_path)
+			else:
+				self._backgr_img = None
+			self.update()
+	
+	def get_background_image(self):
+		return self._backgr_img # TODO shall return path if path was saved
+
+	def set_background_mode(self, fit_mode):
+		'''fit_mode is a str
+			'none': image has its original size or stretched to fit
+			'full': image is never cropped
+			'width': image's width never exceeds rectangle's width
+			'height': similar to width
+		'''
+		self._bg_img_fit_mode = fit_mode
+
+	def set_background_stretch(self, stretch):
+		''' stretch is a bool
+			True: the image is enlarged if too small for the rectangle
+			False: image will never be larger than its original dimension
+		'''
+		self._bg_img_stretch = stretch
+
 	def set_paint_callback(self, cb):
 		'''Use a different method for painting'''
 		self.paint_ = self.paint
@@ -345,59 +377,6 @@ class StyledItem(QQuickPaintedItem):
 			flags = Qt.TextWordWrap | Qt.AlignCenter
 			painter.setPen(QPen(self.get_font_color()))
 			painter.drawText(br_text, flags, self._text)
-
-	def set_pos(self, x, y):
-		self.setX(x)
-		self.setY(y)
-	
-	def get_pos(self):
-		return self.x(), self.y()
-	
-	def set_size(self, w, h):
-		self.setWidth(w)
-		self.setHeight(h)
-	
-	def get_size(self):
-		return self.width(), self.height()
-
-	def opacity_to(self, end_op, on_finished=None, **kwargs):
-		'''Animate item opacity'''
-		with seq_anim_cm(self) as agrp:
-			if on_finished:
-				agrp.finished.connect(on_finished)
-			agrp.addAnimation(prop_animation(self, 'opacity', end_op, **kwargs))
-	
-	def move_to(self, x, y, offset=False, on_finished=None, **kwargs):
-		'''Animate the movement of this item toward a given target position.'''
-		if offset:
-			xo, yo = self.get_pos()
-			if x is not None: x += xo
-			if y is not None: y += yo
-
-		with par_anim_cm(self) as agrp:
-			if on_finished:
-				agrp.finished.connect(on_finished)
-			if x is not None:
-				agrp.addAnimation(prop_animation(self, 'x', x, **kwargs))
-			if y is not None:
-				agrp.addAnimation(prop_animation(self, 'y', y, **kwargs))
-	
-	def resize_to(self, w, h, on_finished=None, **kwargs):
-		'''Animate the resize of this item'''
-		with par_anim_cm(self) as agrp:
-			if on_finished:
-				agrp.finished.connect(on_finished)
-			agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
-			agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
-	
-	def rotate_to(self, a, offset=False, on_finished=None, **kwargs):
-		'''Animate the rotation of this item'''
-		if offset:
-			a += self.rotation()
-		with seq_anim_cm(self) as agrp:
-			if on_finished:
-				agrp.finished.connect(on_finished)
-			agrp.addAnimation(prop_animation(self, 'rotation', a, **kwargs))
 
 	def set_x_radius(self, x):
 		self._x_rad = x

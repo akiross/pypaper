@@ -92,6 +92,7 @@ class Window(QWidget):
 		self.output_.setFont(font)
 
 		# Use output_ to display stdout and stderr
+		# TODO check if redirect_stdout/redirect_stderr can help
 		class Writer(io.IOBase):
 			'''This class is used in place of stdout and stderr to
 			print directly to the output window.
