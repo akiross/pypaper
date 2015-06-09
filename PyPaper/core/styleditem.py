@@ -164,13 +164,20 @@ class Item(QQuickPaintedItem, Registry):
 			if y is not None:
 				agrp.addAnimation(prop_animation(self, 'y', y, **kwargs))
 	
-	def resize_to(self, w, h, on_finished=None, **kwargs):
+	def resize_to(self, w, h, offset=False, on_finished=None, **kwargs):
 		'''Animate the resize of this item'''
+		if offset:
+			wo, ho = self.get_size()
+			if w is not None: w += wo
+			if h is not None: h += ho
+
 		with par_anim_cm(self) as agrp:
 			if on_finished:
 				agrp.finished.connect(on_finished)
-			agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
-			agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
+			if w is not None:
+				agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
+			if h is not None:
+				agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
 	
 	def rotate_to(self, a, offset=False, on_finished=None, **kwargs):
 		'''Animate the rotation of this item'''

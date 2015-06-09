@@ -8,7 +8,7 @@
 # 2. 
 
 from PyPaper.core.styleditem import StyledItem
-from PyPaper.core.animation import par_anim_cm
+from PyPaper.core.animation import par_anim_cm, seq_anim_cm
 from PyQt5.QtCore import QAbstractAnimation, QRectF, QEasingCurve
 from functools import partial
 from collections import namedtuple
@@ -47,24 +47,24 @@ def v_dist(target, orig, offs):
 def sequenced(cls):
 	setattr(cls, '_sequences', {})
 	for m_name in set(cls.__dict__.keys()):
-		print('Processing class method:', m_name)
 		method = cls.__dict__[m_name]
 		# Filter methods not for sequence
 		if not hasattr(method, '__seq'):
 			continue
-		print('Good method, has __seq info')
 		# Found a sequence method, get the parameters
 		name, paint_func, params = getattr(method, '__seq')
 	
 		# Save the sequence painting function
-		print('Name is', name)
 		cls._sequences[name] = paint_func
 
 		# If there is no action, method just animate frames
 		# Params are guaranteed to contain a default duration
 		def _nact_seq(self, *args, **kwargs):
-			print('Performing sequence w/o action', name)
 			duration = kwargs.get('duration', params['duration'])
+			print('Performing sequence', name, 'w/ duration', duration)
+			# No animation with zero duration
+			if duration <= 0:
+				return
 			# Create the animation
 			with par_anim_cm(self) as grp:
 				# Create time dependent animation
@@ -75,19 +75,24 @@ def sequenced(cls):
 		# execute the action in parallel with frame animation
 		# params may contain duration or speed
 		def _act_seq(self, *args, **kwargs):
-			print('Performing sequence', name)
 			# Get actions FIXME a better way is required to handle actions and their duration given *args
 			action_write, action_read = params['action']
-
 			if 'speed' not in params:
 				duration = params['duration']
 			else:
+				print('Computing state and duration')
 				# Get current state (position, rotation, whatever)
 				state = action_read(self)
+				print('  State is', state)
 				# Compute distance between current and desired state
 				state, dist = v_dist(state, args, kwargs.get('offset', False))
+				print('  State dist', state, dist)
 				# Compute duration
 				duration = dist * 1000 / params['speed']
+			print('Performing sequence', name, 'w/ duration', duration)
+			# No animation with zero duration
+			if duration <= 0:
+				return
 			# Create the animation
 			with par_anim_cm(self) as grp:
 				# Create time dependent animation
@@ -101,17 +106,12 @@ def sequenced(cls):
 		else:
 			_seq = _nact_seq
 
-		print('Found a good method', name)
 		_seq.__name__ = name + '_to'
 		_seq.__qualname__ = '.'.join(_seq.__qualname__.split('.')[:-1] + [_seq.__name__])
 		setattr(cls, name + '_to', _seq)
-		print(_seq)
-	print('Cls sequences:', cls._sequences.keys())
 	return cls
 
 def sequence(name, speed=None, duration=None, action=None, easing='Linear'):
-	print('Creating sequence', name)
-
 	# Check that parameters are Ok
 	if action is None:
 		# When action is None, we cannot compute distances, therefore
@@ -128,7 +128,6 @@ def sequence(name, speed=None, duration=None, action=None, easing='Linear'):
 
 	# Create the decorator function
 	def _decorator(func):
-		print('Decorating method', func)
 		params = {
 				'speed': speed,
 				'duration': duration,
@@ -151,57 +150,34 @@ class Sprite(StyledItem):
 		self._frame = (None, None, None)
 		self._sequences = {}
 	
-	# TODO ideale sarebbe avere un decoratore che fa tutto quello che serve
-	# sulla classe. Ad esempio
-	# @sequence('walk', speed=123, action='move_to', easing='Linear')
-	# def _walk_paint(self, painter, time, duration):
-	#   definendo qui il codice che fa il painting. Verrebbe quindi definito
-	#   automaticamente il metodo walk_to, che esegue l'animazione con quei parametri
-	#   segnati di default. Il metodo avrebbe i parametri richiesti da move_to
-	#   che verrebbero letti automaticamente (se action viene specificata)
-	#   e automaticamente verrebbero passati all'azione al momento dell'esecuzione
-	#   eseguendo in parallelo l'animazione dell'azione e di questa sequenza
-	#   Essendo una sequenza, non c'é bisogno di un metodo diretto, ma solo del *_to
-	#   perché stiamo sempre animando con interpolazione.
-	
 	def paint(self, painter):
-		if self._frame[0] in Sprite._sequences:
-			print('Found paint for sequence', self._frame[0])
-			Sprite._sequences[self._frame[0]](self, painter, self._frame[1], self._frame[2])
-	
-	def _paint_walk(self, painter, time, duration):
+		sname, time, dur = self._frame
+		if sname in Sprite._sequences:
+			Sprite._sequences[sname](self, painter, time, dur)
+
+	def _set_current_frame(self, sequence, time, duration):
+		self._frame = (sequence, time, duration)
+		self.update()
+
+	@sequence('run', speed=200, action=(StyledItem.move_to, StyledItem.get_pos))
+	def _run_paint(self, painter, time, duration):
+		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
+		bbox.setHeight(bbox.height() * time / duration)
+		painter.fillRect(bbox, self.get_background_color())
+
+	@sequence('walk', speed=100, action=(StyledItem.move_to, StyledItem.get_pos))
+	def _walk_paint(self, painter, time, duration):
 		'''
 		:type painter: QPainter
 		'''
 		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
 		bbox.setWidth(bbox.width() * time / duration)
 		painter.fillRect(bbox, self.get_background_color())
-	
-	def _set_current_frame(self, sequence, time, duration):
-		self._frame = (sequence, time, duration)
-		self.update()
-	
-	def walk_to(self, x, y, speed=100, offset=False):
-		print('Walking :) Good!')
-		easing = 'Linear'
-		# Register the sequence
-		self._sequences['walk'] = self._paint_walk
-		# Get current position
-		pos = self.get_pos()
-		# If relative, compute the actual xy values
-		(x, y), dist = v_dist((x, y), pos, offset)
-		duration = dist * 1000 / speed
-		with par_anim_cm(self) as grp:
-			ta = TimeAnim(duration, partial(self._set_current_frame, 'walk'))
-			self.move_to(x, y, duration=duration, easing=easing)
-			grp.addAnimation(ta)
-	
-	@sequence('run', speed=200, action=(StyledItem.move_to, StyledItem.get_pos))
-	def _run_paint(self, painter, time, duration):
-		print('Painting run_paint')
-		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
-		bbox.setHeight(bbox.height() * time / duration)
-		painter.fillRect(bbox, self.get_background_color())
-		
 
 s = Sprite(_root_)
+
+with seq_anim_cm(s):
+	# C'è un problema: questi non vengono messi davvero in sequenza e i valori sono calcolati immediatamente, non al momento della chiamata... WROOONG
+	s.walk_to(100, 100)
+	s.run_to(0, 0)
+

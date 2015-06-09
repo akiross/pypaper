@@ -13,7 +13,7 @@ b.set_pos(100, 50)
 with seq_anim_cm(a) as ag:
 	for _ in range(2):
 		a.move_to(50, 100)
-		with seq_anim_cm(b, parent_ag=ag):
+		with seq_anim_cm(b, parent=ag):
 			for _ in range(2):
 				b.move_to(100, 100)
 				b.move_to(100, 50)
