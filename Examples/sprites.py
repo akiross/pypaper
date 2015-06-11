@@ -18,7 +18,8 @@ import warnings
 class TimeAnim(QAbstractAnimation):
 	def __init__(self, duration, callback, easing='InOutQuad', parent=None):
 		super().__init__(parent)
-		self._duration = duration
+		self._duration = 0
+		self._duration_f = duration
 		self._callback = callback
 		# FIXME Abstractanimation non ha l'easing curve, che però ha variant animation
 		# Bisogna considerare di sostituirlo. Inoltre, c'é da subclassare meno
@@ -35,6 +36,17 @@ class TimeAnim(QAbstractAnimation):
 
 	def updateCurrentTime(self, curr_time):
 		self._callback(curr_time, self._duration)
+
+	def updateState(self, new_state, old_state):
+		print('Changing state')
+		if new_state == QAbstractAnimation.Running and old_state == QAbstractAnimation.Stopped:
+			try:
+				print('Computing the duration :P')
+				self._duration = self._duration_f()
+			except TypeError:
+				self._duration = self._duration_f
+#			self._duration = self._duration + 1000
+
 
 def v_dist(target, orig, offs):
 	'''Computes Euclidean distance between (x,y) and (ox,oy)
@@ -63,8 +75,8 @@ def sequenced(cls):
 			duration = kwargs.get('duration', params['duration'])
 			print('Performing sequence', name, 'w/ duration', duration)
 			# No animation with zero duration
-			if duration <= 0:
-				return
+#			if duration <= 0:
+#				return
 			# Create the animation
 			with par_anim_cm(self) as grp:
 				# Create time dependent animation
@@ -77,28 +89,32 @@ def sequenced(cls):
 		def _act_seq(self, *args, **kwargs):
 			# Get actions FIXME a better way is required to handle actions and their duration given *args
 			action_write, action_read = params['action']
-			if 'speed' not in params:
-				duration = params['duration']
-			else:
-				print('Computing state and duration')
-				# Get current state (position, rotation, whatever)
-				state = action_read(self)
-				print('  State is', state)
-				# Compute distance between current and desired state
-				state, dist = v_dist(state, args, kwargs.get('offset', False))
-				print('  State dist', state, dist)
-				# Compute duration
-				duration = dist * 1000 / params['speed']
-			print('Performing sequence', name, 'w/ duration', duration)
-			# No animation with zero duration
-			if duration <= 0:
-				return
+			# FIXME duration shall be computed when the animation starts! Not during the call
+			# we can pass a function to TimeAnim that does the calculation
+			def get_duration():
+				if 'speed' not in params:
+					return params['duration']
+				else:
+					print('Computing state and duration')
+					# Get current state (position, rotation, whatever)
+					state = action_read(self)
+					print('  State is', state)
+					# Compute distance between current and desired state
+					state, dist = v_dist(state, args, kwargs.get('offset', False))
+					print('  State dist', state, dist)
+					# Compute duration
+					duration = dist * 1000 / params['speed']
+					print('Performing sequence', name, 'w/ duration', duration)
+					return duration
+#			# No animation with zero duration
+#			if duration <= 0:
+#				return
 			# Create the animation
 			with par_anim_cm(self) as grp:
 				# Create time dependent animation
-				ta = TimeAnim(duration, partial(self._set_current_frame, name))
+				ta = TimeAnim(get_duration, partial(self._set_current_frame, name))
 				# Perform the action
-				action_write(self, *args, duration=duration, easing=params['easing'])
+				action_write(self, *args, easing=params['easing'])
 				grp.addAnimation(ta)
 
 		if 'action' in params:
@@ -162,7 +178,8 @@ class Sprite(StyledItem):
 	@sequence('run', speed=200, action=(StyledItem.move_to, StyledItem.get_pos))
 	def _run_paint(self, painter, time, duration):
 		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
-		bbox.setHeight(bbox.height() * time / duration)
+		if duration > 0:
+			bbox.setHeight(bbox.height() * time / duration)
 		painter.fillRect(bbox, self.get_background_color())
 
 	@sequence('walk', speed=100, action=(StyledItem.move_to, StyledItem.get_pos))
@@ -171,7 +188,8 @@ class Sprite(StyledItem):
 		:type painter: QPainter
 		'''
 		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
-		bbox.setWidth(bbox.width() * time / duration)
+		if duration > 0:
+			bbox.setWidth(bbox.width() * time / duration)
 		painter.fillRect(bbox, self.get_background_color())
 
 s = Sprite(_root_)
