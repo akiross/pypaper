@@ -17,18 +17,64 @@
 
 from PyQt5.QtCore import QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QEventLoop, QAbstractAnimation
 
+def qvariant_distance(v1, v2):
+	'''This method computes the distance between two QVariants value,
+	it is used to calculate the duration of animations based on speed.
+	This function has to return a float'''
+	assert(type(v1) == type(v2))
 
-def prop_animation(obj, prop, end, duration=500, easing='InOutQuad', start=None):#, on_finished=None):
+	from PyQt5.QtGui import QColor
+	# TODO do the same for the other types: rect(f), line(f), point(f), size(f)
+
+	if isinstance(v1, QColor):
+		return ((v1.redF() - v2.redF()) ** 2 + (v1.greenF() - v2.greenF()) ** 2 + (v1.blueF() - v2.blueF()) ** 2 + (v1.alphaF() - v2.alphaF()) ** 2) ** 0.5
+	else:
+		return abs(v2 - v1)
+
+class PropertyAnimation(QPropertyAnimation):
+	'''This class extends QPropertyAnimation to support "speed",
+	it adds a method to set speed, instead of duration, which will cause
+	the duration to be set automatically when starting the animation.
+	Duration will vary dependently from the speed and the start-end values
+	set by the user.'''
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._speed = None
+	
+	def set_speed(self, speed):
+		self._speed = speed
+	
+	def compute_duration(self, start_val, end_val):
+		return 1000 * qvariant_distance(start_val, end_val) / self._speed
+	
+	def updateState(self, new_state, old_state):
+		super().updateState(new_state, old_state)
+		# When starting, change current value and end value
+		if new_state == QPropertyAnimation.Running and old_state == QPropertyAnimation.Stopped and self._speed:
+			# Get start and end values
+			sv, ev = self.startValue(), self.endValue()
+			# Get current value for property
+			cv = self.targetObject().property(self.propertyName())
+			if sv is None:
+				sv = cv
+			elif ev is NOne:
+				ev = cv
+			duration = self.compute_duration(sv, ev)
+			self.setDuration(duration)
+
+def prop_animation(obj, prop, end, duration=500, easing='InOutQuad', start=None, speed=None):#, on_finished=None):
 	'''Builds a property animation for an object'''
 	if hasattr(QEasingCurve, easing):
 		ec = getattr(QEasingCurve, easing)
 	else:
 		ec = QEasingCurve.Linear
 	
-	an = QPropertyAnimation(obj, prop)
+	an = PropertyAnimation(obj, prop)
 	if start is not None:
 		an.setStartValue(start)
 	an.setEndValue(end)
+	an.set_speed(speed)
 	an.setDuration(duration)
 	an.setEasingCurve(ec)
 
