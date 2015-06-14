@@ -15,7 +15,7 @@
 #
 # Copyright 2015 Alessandro "AkiRoss" Re
 
-from PyQt5.QtCore import QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QEventLoop, QAbstractAnimation
+from PyQt5.QtCore import QAbstractAnimation, QVariantAnimation, QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QEventLoop
 
 def qvariant_distance(v1, v2):
 	'''This method computes the distance between two QVariants value,
@@ -30,6 +30,35 @@ def qvariant_distance(v1, v2):
 		return ((v1.redF() - v2.redF()) ** 2 + (v1.greenF() - v2.greenF()) ** 2 + (v1.blueF() - v2.blueF()) ** 2 + (v1.alphaF() - v2.alphaF()) ** 2) ** 0.5
 	else:
 		return abs(v2 - v1)
+
+class TimeAnim(QVariantAnimation):
+	'''When animation starts, the duration_func is called to get
+	the duration of the animation. Animation will always start at 0
+	and finish at the specified duration.'''
+
+	def __init__(self, duration_func, callback, easing='InOutQuad', parent=None):
+		super().__init__(parent)
+		self._duration_f = duration_func
+		self._callback = callback
+
+		# Set the easing curve
+		if hasattr(QEasingCurve, easing):
+			ec = getattr(QEasingCurve, easing)
+		else:
+			ec = QEasingCurve.Linear
+		self.setEasingCurve(ec)
+	
+	def updateCurrentValue(self, new_val):
+		self._callback(new_val, self._duration)
+
+	def updateState(self, new_state, old_state):
+		super().updateState(new_state, old_state)
+		# When starting, change current value and end value
+		if new_state == QVariantAnimation.Running and old_state == QVariantAnimation.Stopped:
+			self._duration = float(self._duration_f())
+			self.setStartValue(0.0)
+			self.setEndValue(self._duration)
+			self.setDuration(self._duration)
 
 class PropertyAnimation(QPropertyAnimation):
 	'''This class extends QPropertyAnimation to support "speed",
@@ -46,7 +75,9 @@ class PropertyAnimation(QPropertyAnimation):
 		self._speed = speed
 	
 	def compute_duration(self, start_val, end_val):
-		return 1000 * qvariant_distance(start_val, end_val) / self._speed
+		d = 1000 * qvariant_distance(start_val, end_val) / self._speed
+		print('Duration for property animation', d, 'speed was', self._speed)
+		return d
 	
 	def updateState(self, new_state, old_state):
 		super().updateState(new_state, old_state)

@@ -163,7 +163,7 @@ class Item(QQuickPaintedItem, Registry):
 				agrp.addAnimation(prop_animation(self, 'x', x, **kwargs))
 			if y is not None:
 				agrp.addAnimation(prop_animation(self, 'y', y, **kwargs))
-	
+
 	def resize_to(self, w, h, offset=False, on_finished=None, **kwargs):
 		'''Animate the resize of this item'''
 		if offset:

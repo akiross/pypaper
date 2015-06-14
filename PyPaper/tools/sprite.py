@@ -1,4 +1,89 @@
 from PyPaper.core.styleditem import StyledItem
+from PyPaper.core.animation import par_anim_cm, TimeAnim
+from functools import partial
+import warnings
+
+def sequenced(cls):
+	'''This decorator prepares a Sprite subclass to store sequence methods'''
+	setattr(cls, '_sequences', {})
+	for m_name in set(cls.__dict__.keys()):
+		method = cls.__dict__[m_name]
+		# Filter methods not for sequence
+		if not hasattr(method, '__seq'):
+			continue
+
+		def _scope_definition(name, paint_func, params):
+			# Save the sequence painting function
+			cls._sequences[name] = paint_func
+
+			def _seq(self, *args, **kwargs):
+				'''Perform the animation of the frame and the action'''
+				# TODO Merge kwargs
+
+				def _durat_func():
+					'''Determine the duration of the animation, using speed'''
+					dist = params['dist_func'](self, *args)
+					# TODO check if this computation is necessary or if we can in
+					# some way recycle what is done in animation.PropertyAnimation
+					# (but I think it is not possible, or not easily)
+					duration = dist * 1000 / params['speed']
+					print('Duration for sequence', duration, 'distance was', dist, 'speed', params['speed'])
+					return duration
+
+				with par_anim_cm(self) as grp:
+					ta = TimeAnim(_durat_func, partial(self._set_current_frame, name), easing=params['easing'])
+#					print('action is', params['action'], 'on args', args)
+					params['action'](self, *args, easing=params['easing'], speed=params['speed'])
+					grp.addAnimation(ta)
+
+			_seq.__name__ = name + '_to'
+			_seq.__qualname__ = '.'.join(_seq.__qualname__.split('.')[:-1] + [_seq.__name__])
+			setattr(cls, name + '_to', _seq)
+
+		# Found a sequence method, get the parameters
+		_scope_definition(*getattr(method, '__seq'))
+	return cls
+
+def sequence(name, speed=None, distance_func=None, duration=None, action=None, easing='InOutQuad'):
+	'''Decorate a method in a sequenced class, creating a new method <name>_to.
+	The method will execute a sprite animation of specified speed or duration, executing in parallel
+	the specified action (if not None). Action is usually something like move_to or rotate_to.
+	The created method will receive some parameters and forward them to the action.
+	If speed is specified and duration is not, the duration of the animation will be computed
+	at the instant of animation start, using the provided distance_func.
+	distance_func takes self argument plus any argument accepted by the action, (e.g. self, x, y)
+	and shall return a float representing the distance between the current state of the object
+	(e.g. position) and the input (e.g. x, y)
+	'''
+	# Disable this for now
+	if False: # TODO
+		# Check that parameters are Ok
+		if action is None:
+			# When action is None, we cannot compute distances, therefore
+			# no speed can be calculated
+			if duration is None:
+				raise RuntimeError('Trying to define a sequence "{}" with no action and no duration. Duration and action cannot be both None.'.format(name))
+			elif speed is not None:
+				warnings.warn('Trying to set speed in sequence "{}" with no action. Speed with be ignored.'.format(name))
+				speed = None
+		elif speed is not None and duration is not None:
+			# Speed and duration are in conflict: cannot have both
+			warnings.warn('Trying to set speed and duration in sequence "{}". This is not valid, duration will be ignored.'.format(name))
+			duration = None
+
+	# Create the decorator function
+	def _decorator(func):
+		params = {
+				'speed': speed,
+				'duration': duration,
+				'dist_func': distance_func, # Computes the distance from a state
+				'action': action,
+				'easing': easing,
+				'offset': False,
+				}
+		setattr(func, '__seq', (name, func, params))
+		return func
+	return _decorator
 
 class Sprite(StyledItem):
 	'''Sprite is a general purpose class for items that have
@@ -6,63 +91,37 @@ class Sprite(StyledItem):
 	Sprite can be subclassed to provide custom painting
 	for each frame.
 	Sprite supports the creation of animation sequences
-	which can have different behaviors and can be reused.'''
+	which can have different behaviors and can be reused.
+	
+	Example of usage:
+
+	@sequenced
+	class MySprite(Sprite):
+		def __init__(self, parent):
+			super().__init__(parent)
+		@sequence('walk', speed=100, action=Sprite.move_to, distance_func=df)
+		def _walk_paint(self, painter, time, duration):
+			# Custom painting code
+			pass
+	s = MySprite(_root_)
+	s.walk_to(10, 10)
+
+	df is a "distance function" which takes the same number of parameters
+	of the specified action (3, in this case: self, x, y) and computes a
+	distance between the current state (e.g. self.get_pos()) and the the input
+	state (e.g. x, y). Must return a float
+	'''
+
 	def __init__(self, parent):
 		super().__init__(parent)
+		self._frame = (None, None, None)
 	
-	# L'idea sarebbe quella di usare un generatore o cose simili
-	# in modo pythonico, vorremmo poter decidere noi quali frame
-	# mostrare per una certa animazione. Potremmo fare così:
-	# quando un metodo di sequenza viene creato, si può chiamare una funzione
-	# definita dall'utente che riceve in input dei parametri (da definire)
-	# e che ritorna un generatore di frame. La Sprite, quindi, userebbe quel
-	# generatore per eseguire l'animazione.
-	#
-	# (valutare anche la possibilità di usare un decorator per
-	# creare la sequenza, così da avere una sintassi potenzialmente più
-	# conveniente, che associa ad un metodo la sua sequenza)
-	#
-	# Il problema è come gestire questa animazione col generatore, come far
-	# interagire i due componenti... Perché l'animazione viene fatta per forza
-	# di cose da una QAnimation, e dentro a quella serve chiamare il generatore
-	# per capire di quale frame fare il render.
-	# 
-	# Assumiamo di avere una QAbstractAnimation di fondo. Questa dovrà sapere
-	# quando si inizia e quando si intende finire. Quindi, ogni tanto, questa
-	# manderà un segnale "aggiornata!", però non sappiamo quando lo manderà.
-	# Al ricevimento di tale segnale, serve una funzione che dica in quale frame
-	# ci troviamo e quindi cosa disegnare.
-	# Non vogliamo che questa funzione re-inventi le cose che esistono già (easing)
-	# quindi questa funzione riceverà un certo valore già "mappato" nello spazio finale
-	# e dovrà dire solo in quale frame ci troviamo.
-	# Non può essere un generatore, perché il generatore va in sequenza, mentre qui
-	# può essere che scopriamo i frame in ordine non lineare.
-	def add_sequence(self):
-		pass
+	def paint(self, painter):
+		sname, time, dur = self._frame
+		if sname in type(self)._sequences:
+			type(self)._sequences[sname](self, painter, time, dur)
 
-	def paint_frame(self, painter, sequence, frame):
-		'''To be implemented by the user to draw a given frame in a given sequence'''
-		pass
+	def _set_current_frame(self, sequence, time, duration):
+		self._frame = (sequence, time, duration)
+		self.update()
 
-def looped_generator():
-	pass
-
-class DrawnSprite(Sprite):
-	'''This is an example sprite to test the class.'''
-	def __init__(self, parent):
-		super().__init__(parent)
-	
-		self.add_sequence(
-			name='bubble', # name of the sequence (will create a method)
-			frame_gen=looped_generator, # the generator of frames
-			n_frames=10, # number of frames composing the sequence
-			frame_gen=asd, # this generator 
-			loop=True, # After end frame begin from start again
-			frame_delay=100,
-			start_frame=None,
-			end_frame=10
-		)
-
-
-ds = DrawnSprite(_root_)
-ds.bubble_to(some_param, duration_or_speed=100)
