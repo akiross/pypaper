@@ -24,13 +24,14 @@ def pos_dist(self, x, y, *args):
 #	print('  Distance is', dist)
 	return dist
 
+
 @sequenced
 class MySprite(Sprite):
-	def __init__(self, parent):
-		super().__init__(parent)
+	def __init__(self, parent, *args):
+		super().__init__(parent, *args)
 		self.set_size(50, 50)
 
-	@sequence('run', speed=200, action=StyledItem.move_to, distance_func=pos_dist, easing='Linear')
+	@sequence('run', speed=200, action=StyledItem.move_to, distance_func=pos_dist, easing='OutBounce')
 	def _run_paint(self, painter, time, duration):
 		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
 		if duration > 0:
@@ -48,10 +49,23 @@ class MySprite(Sprite):
 			bbox.setWidth(bbox.width() * time / duration)
 		painter.fillRect(bbox, self.get_background_color())
 
-s = MySprite(_root_)
+s = MySprite(_root_, True)
 
 with seq_anim_cm(s):
-	# C'è un problema: questi non vengono messi davvero in sequenza e i valori sono calcolati immediatamente, non al momento della chiamata... WROOONG
-	s.walk_to(300, 0)
-	s.run_to(0, 0)
+	# Show effect of different speed
+	for speed in [200, 400, 800]:
+		s.resize_to(10, 300)
+		s.resize_to(300, 10)
+		s.resize_to(50, 50, speed=speed, easing='Linear')
 
+	# Defined sequences
+	s.walk_to(300, 0)
+	s.run_to(0, 100)
+	s.move_to(400, 200, speed=100, easing='Linear')
+
+	# Speed works also on colors
+	s.background_color_to((0, 1, 0), duration=2000) # This will take fixed time
+	s.background_color_to((1, 0, 0), duration=0)
+	s.background_color_to((0, 1, 0), speed=1) # This will take some time
+	s.background_color_to((1, 0, 0), duration=0)
+	s.background_color_to((0.5, 0, 0), speed=1) # This will take less time

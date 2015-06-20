@@ -133,14 +133,32 @@ class Item(QQuickPaintedItem, Registry):
 		self.setY(y)
 	
 	def get_pos(self):
-		return self.x(), self.y()
+		return (self.x(), self.y())
+
+	def _set_pos(self, point):
+		self.setX(point.x())
+		self.setY(point.y())
+	
+	def _get_pos(self):
+		return QPointF(self.x(), self.y())
+
+	pos = pyqtProperty(QPointF, fget=_get_pos, fset=_set_pos)
 	
 	def set_size(self, w, h):
 		self.setWidth(w)
 		self.setHeight(h)
 	
 	def get_size(self):
-		return self.width(), self.height()
+		return (self.width(), self.height())
+
+	def _set_size(self, size):
+		self.setWidth(size.width())
+		self.setHeight(size.height())
+	
+	def _get_size(self):
+		return QSizeF(self.width(), self.height())
+
+	size = pyqtProperty(QSizeF, fget=_get_size, fset=_set_size)
 
 	def opacity_to(self, end_op, on_finished=None, **kwargs):
 		'''Animate item opacity'''
@@ -159,9 +177,11 @@ class Item(QQuickPaintedItem, Registry):
 		with par_anim_cm(self) as agrp:
 			if on_finished:
 				agrp.finished.connect(on_finished)
-			if x is not None:
+			if x is not None and y is not None:
+				agrp.addAnimation(prop_animation(self, 'pos', QPointF(x, y), **kwargs))
+			elif x is not None:
 				agrp.addAnimation(prop_animation(self, 'x', x, **kwargs))
-			if y is not None:
+			else:
 				agrp.addAnimation(prop_animation(self, 'y', y, **kwargs))
 
 	def resize_to(self, w, h, offset=False, on_finished=None, **kwargs):
@@ -174,9 +194,11 @@ class Item(QQuickPaintedItem, Registry):
 		with par_anim_cm(self) as agrp:
 			if on_finished:
 				agrp.finished.connect(on_finished)
-			if w is not None:
+			if w is not None and h is not None:
+				agrp.addAnimation(prop_animation(self, 'size', QSizeF(w, h), **kwargs))
+			elif w is not None:
 				agrp.addAnimation(prop_animation(self, 'width', w, **kwargs))
-			if h is not None:
+			else:
 				agrp.addAnimation(prop_animation(self, 'height', h, **kwargs))
 	
 	def rotate_to(self, a, offset=False, on_finished=None, **kwargs):
@@ -187,7 +209,6 @@ class Item(QQuickPaintedItem, Registry):
 			if on_finished:
 				agrp.finished.connect(on_finished)
 			agrp.addAnimation(prop_animation(self, 'rotation', a, **kwargs))
-
 
 class StyledItem(Item):
 	'''StyledItem, this is a multi-purpose item which probably

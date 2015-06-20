@@ -15,21 +15,25 @@
 #
 # Copyright 2015 Alessandro "AkiRoss" Re
 
-from PyQt5.QtCore import QAbstractAnimation, QVariantAnimation, QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QEventLoop
+from PyQt5.QtCore import QAbstractAnimation, QVariantAnimation, QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QEventLoop, QVariant
 
 def qvariant_distance(v1, v2):
 	'''This method computes the distance between two QVariants value,
 	it is used to calculate the duration of animations based on speed.
 	This function has to return a float'''
-	assert(type(v1) == type(v2))
+	assert(isinstance(v1, type(v2)) or isinstance(v2, type(v1)))
 
 	from PyQt5.QtGui import QColor
+	from PyQt5.QtCore import QPointF, QPoint, QSizeF, QSize
 	# TODO do the same for the other types: rect(f), line(f), point(f), size(f)
 
 	if isinstance(v1, QColor):
 		return ((v1.redF() - v2.redF()) ** 2 + (v1.greenF() - v2.greenF()) ** 2 + (v1.blueF() - v2.blueF()) ** 2 + (v1.alphaF() - v2.alphaF()) ** 2) ** 0.5
-	else:
-		return abs(v2 - v1)
+	if isinstance(v1, QPointF) or isinstance(v1, QPoint):
+		return ((v1.x() - v2.x()) ** 2 + (v1.y() - v2.y()) ** 2) ** 0.5
+	if isinstance(v1, QSizeF) or isinstance(v1, QSize):
+		return ((v1.width() - v2.width()) ** 2 + (v1.height() - v2.height()) ** 2) ** 0.5
+	return abs(v2 - v1)
 
 class TimeAnim(QVariantAnimation):
 	'''When animation starts, the duration_func is called to get
@@ -67,22 +71,25 @@ class PropertyAnimation(QPropertyAnimation):
 	Duration will vary dependently from the speed and the start-end values
 	set by the user.'''
 
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
+	def __init__(self, obj, prop, distance_f=qvariant_distance):
+		'''distance_f is the distance function which receives the start and end value and returns
+		their distance
+		'''
+		super().__init__(obj, prop)
 		self._speed = None
+		self._df = distance_f
 	
 	def set_speed(self, speed):
 		self._speed = speed
 	
 	def compute_duration(self, start_val, end_val):
-		d = 1000 * qvariant_distance(start_val, end_val) / self._speed
-		print('Duration for property animation', d, 'speed was', self._speed)
+		d = 1000 * self._df(start_val, end_val) / self._speed
 		return d
 	
 	def updateState(self, new_state, old_state):
 		super().updateState(new_state, old_state)
 		# When starting, change current value and end value
-		if new_state == QPropertyAnimation.Running and old_state == QPropertyAnimation.Stopped and self._speed:
+		if self._speed and new_state == QPropertyAnimation.Running and old_state == QPropertyAnimation.Stopped:
 			# Get start and end values
 			sv, ev = self.startValue(), self.endValue()
 			# Get current value for property
@@ -105,9 +112,9 @@ def prop_animation(obj, prop, end, duration=500, easing='InOutQuad', start=None,
 	if start is not None:
 		an.setStartValue(start)
 	an.setEndValue(end)
-	an.set_speed(speed)
 	an.setDuration(duration)
 	an.setEasingCurve(ec)
+	an.set_speed(speed)
 
 	return an
 

@@ -27,7 +27,7 @@ def sequenced(cls):
 					# some way recycle what is done in animation.PropertyAnimation
 					# (but I think it is not possible, or not easily)
 					duration = dist * 1000 / params['speed']
-					print('Duration for sequence', duration, 'distance was', dist, 'speed', params['speed'])
+#					print('Duration for sequence', duration, 'distance was', dist, 'speed', params['speed'])
 					return duration
 
 				with par_anim_cm(self) as grp:
@@ -112,14 +112,17 @@ class Sprite(StyledItem):
 	state (e.g. x, y). Must return a float
 	'''
 
-	def __init__(self, parent):
+	def __init__(self, parent, paint_fallback=True):
 		super().__init__(parent)
 		self._frame = (None, None, None)
+		self._fallback = paint_fallback
 	
 	def paint(self, painter):
 		sname, time, dur = self._frame
 		if sname in type(self)._sequences:
 			type(self)._sequences[sname](self, painter, time, dur)
+		elif self._fallback:
+			super().paint(painter)
 
 	def _set_current_frame(self, sequence, time, duration):
 		self._frame = (sequence, time, duration)
