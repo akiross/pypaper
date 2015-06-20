@@ -16,14 +16,8 @@ def v_dist(target, orig, offs):
 
 def pos_dist(self, x, y, *args):
 	target = (x, y)
-#	print('Computing distance for self', self, 'and target', target, 'with extra args', args)
-	# FIXME this distance is not the same distance used for animating the properties
-	# properties are animated one at time, thus requiring less time than a single animation
-	# of all of them. This is euclidean distance, the other is not
 	state, dist = v_dist(self.get_pos(), target, False)
-#	print('  Distance is', dist)
 	return dist
-
 
 @sequenced
 class MySprite(Sprite):
@@ -62,6 +56,9 @@ with seq_anim_cm(s):
 	s.walk_to(300, 0)
 	s.run_to(0, 100)
 	s.move_to(400, 200, speed=100, easing='Linear')
+
+	# Offset
+#	s.walk_to(100, 100, offset=True) TODO
 
 	# Speed works also on colors
 	s.background_color_to((0, 1, 0), duration=2000) # This will take fixed time
