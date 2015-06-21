@@ -11,7 +11,7 @@ Written in Python 3.3+ and it is scriptable in Python 3.
 I like Python 3. Please use Python 3.
 
 Nevertheless, I developed and tested on my machine only, and the code may
-be not work anywhere else.
+be not working anywhere else.
 
 You will need PyQt5 or something compatible, because I use QtQuick 2.
 Also, I used jedi to provide autocompletion. I did not provide a fallback,
@@ -199,6 +199,20 @@ handler. For example:
 
 And it's done. Similar approaches can be used with item events; check out
 the StyledItem source code to see which events are available.
+
+### Step 5: sprites
+
+Sprites are items with "animated sequences". For example, a sprite is an
+item that can *walk*, *run*, *stand* or whatever you want. You create a
+sprite and provide a painting method for each sequence, and decorate it.
+Sequence may be associated to an action, for example, when walking and
+running, you may want to *move* the item; move is the action here.
+
+A basic example is in Examples/sprites.py, showing a sprite which has a
+couple of sequences.
+
+A more videogame-oriented example, where the sprite is a frame of an
+animation image, is in Examples/gamesprite.py.
 
 ## Library
 

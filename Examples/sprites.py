@@ -24,9 +24,12 @@ class MySprite(Sprite):
 	def __init__(self, parent, *args):
 		super().__init__(parent, *args)
 		self.set_size(50, 50)
+		self.set_border_color(None)
+		self.set_background_image('./Examples/tiles.png')
+		self._fsize = (48, 48)
 
 	@sequence('run', speed=200, action=StyledItem.move_to, distance_func=pos_dist, easing='OutBounce')
-	def _run_paint(self, painter, time, duration):
+	def _run_paint(self, painter, speed, time, duration):
 		bbox = QRectF(0, 0, *self.get_size()).adjusted(1, 1, -1, -1)
 		if duration > 0:
 			nehe = bbox.height() * time / duration
@@ -34,7 +37,7 @@ class MySprite(Sprite):
 		painter.fillRect(bbox, self.get_background_color())
 
 	@sequence('walk', speed=100, action=StyledItem.move_to, distance_func=pos_dist)
-	def _walk_paint(self, painter, time, duration):
+	def _walk_paint(self, painter, speed, time, duration):
 		'''
 		:type painter: QPainter
 		'''
@@ -42,27 +45,37 @@ class MySprite(Sprite):
 		if duration > 0:
 			bbox.setWidth(bbox.width() * time / duration)
 		painter.fillRect(bbox, self.get_background_color())
+	
+	@sequence('bomb', speed=100, action=StyledItem.move_to, distance_func=pos_dist, easing='Linear')
+	def _bomb_paint(self, painter, speed, time, duration):
+		f = int(time // speed) % 3
+		self.bg_clip_rect = (48 * f, 0, 48, 48)
+		StyledItem.paint(self, painter)
 
 s = MySprite(_root_, True)
 
-with seq_anim_cm(s):
-	# Show effect of different speed
-	for speed in [200, 400, 800]:
-		s.resize_to(10, 300)
-		s.resize_to(300, 10)
-		s.resize_to(50, 50, speed=speed, easing='Linear')
+if True:
+	with seq_anim_cm(s):
+		# Show effect of different speed
+		for speed in [200, 400, 800]:
+			s.resize_to(10, 300)
+			s.resize_to(300, 10)
+			s.resize_to(50, 50, speed=speed, easing='Linear')
 
-	# Defined sequences
-	s.walk_to(300, 0)
-	s.run_to(0, 100)
-	s.move_to(400, 200, speed=100, easing='Linear')
+		# Defined sequences
+		s.walk_to(300, 0)
+		s.run_to(0, 100)
+		s.move_to(400, 200, speed=100, easing='Linear')
 
-	# Offset
-#	s.walk_to(100, 100, offset=True) TODO
+		# Offset
+	#	s.walk_to(100, 100, offset=True) TODO
 
-	# Speed works also on colors
-	s.background_color_to((0, 1, 0), duration=2000) # This will take fixed time
-	s.background_color_to((1, 0, 0), duration=0)
-	s.background_color_to((0, 1, 0), speed=1) # This will take some time
-	s.background_color_to((1, 0, 0), duration=0)
-	s.background_color_to((0.5, 0, 0), speed=1) # This will take less time
+		# Speed works also on colors
+		s.background_color_to((0, 1, 0), duration=2000) # This will take fixed time
+		s.background_color_to((1, 0, 0), duration=0)
+		s.background_color_to((0, 1, 0), speed=1) # This will take some time
+		s.background_color_to((1, 0, 0), duration=0)
+		s.background_color_to((0.5, 0, 0), speed=1) # This will take less time
+		
+		# Animate with image frames
+		s.bomb_to(50, 300)

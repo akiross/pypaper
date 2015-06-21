@@ -3,6 +3,14 @@ from PyPaper.core.animation import par_anim_cm, TimeAnim
 from functools import partial
 import warnings
 
+# FIXME a protocol should be defined to allow the creation of other decorators
+# * sequence create a time based sequence
+# * frameseq create a frame based sequence
+# * user may want to create other sequence decorators
+# Most of the information about the definition of the sequence should be in the
+# sequence decorator, while sequenced should use a protocol to get that information
+# and place it in the right place
+
 def sequenced(cls):
 	'''This decorator prepares a Sprite subclass to store sequence methods'''
 	setattr(cls, '_sequences', {})
@@ -31,7 +39,7 @@ def sequenced(cls):
 					return duration
 
 				with par_anim_cm(self) as grp:
-					ta = TimeAnim(_durat_func, partial(self._set_current_frame, name), easing=params['easing'])
+					ta = TimeAnim(_durat_func, partial(self._set_current_frame, name, params['speed']), easing=params['easing'])
 #					print('action is', params['action'], 'on args', args)
 					params['action'](self, *args, easing=params['easing'], speed=params['speed'])
 					grp.addAnimation(ta)
@@ -114,17 +122,17 @@ class Sprite(StyledItem):
 
 	def __init__(self, parent, paint_fallback=True):
 		super().__init__(parent)
-		self._frame = (None, None, None)
+		self._frame = (None, None, None, None)
 		self._fallback = paint_fallback
 	
 	def paint(self, painter):
-		sname, time, dur = self._frame
+		sname, speed, time, dur = self._frame
 		if sname in type(self)._sequences:
-			type(self)._sequences[sname](self, painter, time, dur)
+			type(self)._sequences[sname](self, painter, speed, time, dur)
 		elif self._fallback:
 			super().paint(painter)
 
-	def _set_current_frame(self, sequence, time, duration):
-		self._frame = (sequence, time, duration)
+	def _set_current_frame(self, sequence, speed, time, duration):
+		self._frame = (sequence, speed, time, duration)
 		self.update()
 
